@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="OREO - Ore Rescue, Exploration and Observation. Smart IoT & AI/ML Underground Mining Hazard Detection and Autonomous Rescue System Dashboard.">
+  <meta name="theme-color" content="#0a0d14">
+  <title>OREO | Ore Rescue, Exploration & Observation — Tactical Mining Command</title>
+  
+  <!-- Google Fonts: Orbitron for Sci-fi/Tactical Headers, Rajdhani for Telemetry, JetBrains Mono for Code/Stats, Inter for Body -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=VT323&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-dark">
+  <!-- Emergency Evacuation Fullscreen Strobe Warning Overlay (Hidden by default) -->
+  <div id="emergency-strobe" class="emergency-strobe-overlay hidden" aria-hidden="true">
+    <div class="emergency-banner-top">
+      <span class="pulse-icon">🚨</span> CRITICAL EMERGENCY EVACUATION ACTIVE — ALL PERSONNEL EVACUATE SHAFT IMMEDIATELY <span class="pulse-icon">🚨</span>
+    </div>
+  </div>
+
+  <div class="app-layout">
+    <!-- TOP TACTICAL NAVIGATION BAR -->
+    <header class="top-nav" id="top-nav">
+      <div class="nav-left">
+        <div class="logo-container" id="brand-logo-container">
+          <img src="assets/logo.jpg" alt="OREO Emblem" class="brand-logo-img" id="brand-logo">
+          <div class="brand-text">
+            <h1 class="brand-title">OREO</h1>
+            <p class="brand-subtitle">Ore Rescue, Exploration & Observation</p>
+          </div>
+        </div>
+        <div class="system-status-chip" id="system-status-chip">
+          <span class="status-dot online" id="status-pulse-dot"></span>
+          <span class="status-label" id="status-text">SYSTEM ONLINE</span>
+        </div>
+      </div>
+
+      <div class="nav-center">
+        <div class="sector-badge">
+          <span class="sector-label">SHAFT / SECTOR</span>
+          <span class="sector-value" id="current-sector">SECTOR B-7 &bull; LVL -180m</span>
+        </div>
+        <div class="mission-timer-badge">
+          <span class="timer-label">MISSION ELAPSED (MET)</span>
+          <span class="timer-value" id="mission-clock">00:24:18</span>
+        </div>
+        <div class="link-quality-badge" title="ESP32 Wi-Fi Telemetry Link">
+          <span class="wifi-icon" id="wifi-icon">📶</span>
+          <span class="link-label">ESP32 LINK</span>
+          <span class="link-speed" id="telemetry-latency">14ms &bull; -58dBm</span>
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <!-- Audio Synthesizer Alarm Mute Button -->
+        <button class="icon-btn" id="audio-toggle-btn" title="Toggle Tactical Audio Alarm Siren">
+          <span id="audio-icon">🔊</span>
+          <span class="btn-text" id="audio-status-text">SIREN ON</span>
+        </button>
+
+        <!-- Live Simulation vs Hardware ESP32 Mode Toggle -->
+        <div class="mode-selector" title="Switch between Simulation and Live ESP32 Hardware Bridge">
+          <button class="mode-btn active" id="sim-mode-btn">SIMULATION</button>
+          <button class="mode-btn" id="hw-mode-btn">ESP32 LIVE</button>
+        </div>
+
+        <!-- Connection Settings Button -->
+        <button class="icon-btn secondary" id="settings-modal-btn" title="ESP32 Network & Sensor Config">
+          ⚙️ CONFIG
+        </button>
+      </div>
+    </header>
+
+    <!-- MAIN DASHBOARD CONTENT GRID -->
+    <main class="dashboard-grid">
+      
+      <!-- COLUMN 1: LIVE VIDEO STREAM & ROVER TELEOPERATION -->
+      <section class="grid-col col-primary" aria-label="Rover Vision and Teleoperation">
+        
+        <!-- Live Video Viewport Card -->
+        <div class="card tactical-card video-card" id="video-card">
+          <div class="card-header">
+            <div class="header-title-group">
+              <span class="card-indicator live-pulse"></span>
+              <h2 class="card-title">ESP32-CAM TACTICAL FEED</h2>
+              <span class="camera-fps-badge" id="camera-fps">30 FPS &bull; 1080p HUD</span>
+            </div>
+            <div class="camera-controls-toolbar">
+              <!-- Spectrum Vision Filters -->
+              <div class="spectrum-btn-group" role="group" aria-label="Camera Spectrum">
+                <button class="spectrum-btn active" data-mode="optical" id="mode-optical-btn" title="Optical High-Definition Feed">OPTICAL</button>
+                <button class="spectrum-btn" data-mode="thermal" id="mode-thermal-btn" title="Thermal FLIR False-Color Infrared">THERMAL FLIR</button>
+                <button class="spectrum-btn" data-mode="night" id="mode-night-btn" title="Phosphor Low-Light Night Vision">NIGHT VISION</button>
+              </div>
+
+              <!-- Auxiliary Overlays -->
+              <button class="util-btn active" id="toggle-ai-boxes-btn" title="Toggle AI Computer Vision Hazard Bounding Boxes">
+                🎯 AI CV HUD
+              </button>
+              <button class="util-btn" id="toggle-headlight-btn" title="Toggle Rover 9V/LED Headlights">
+                💡 LIGHTS
+              </button>
+              <button class="util-btn" id="snapshot-btn" title="Capture Still Image Frame">
+                📸 SNAP
+              </button>
+            </div>
+          </div>
+
+          <!-- Video Viewport Container -->
+          <div class="video-viewport-wrapper" id="video-viewport-wrapper">
+            <canvas id="tactical-canvas" width="800" height="450" aria-label="Rover Live Video Feed"></canvas>
+            
+            <!-- Real-time HUD Elements Overlay -->
+            <div class="hud-overlay" id="hud-overlay">
+              <div class="hud-top-left">
+                <div class="hud-tag">CAM: ESP32-OV2640</div>
+                <div class="hud-tag" id="hud-pan-tilt">PTZ: 0° | +5° TILT</div>
+                <div class="hud-tag" id="hud-lux">LUX: 4.2 (LOW)</div>
+              </div>
+              <div class="hud-top-right">
+                <div class="hud-tag rec-tag"><span class="rec-dot"></span> REC 00:24:18</div>
+                <div class="hud-tag" id="hud-temp-stamp">CHIP: 41.8°C</div>
+              </div>
+
+              <!-- Crosshair & Artificial Horizon / Gyroscope Pitch & Roll -->
+              <div class="hud-crosshair-center">
+                <div class="crosshair-ring"></div>
+                <div class="crosshair-lines"></div>
+                <div class="artificial-horizon" id="artificial-horizon">
+                  <div class="pitch-line center-bar"></div>
+                  <div class="pitch-line top-bar"></div>
+                  <div class="pitch-line bot-bar"></div>
+                </div>
+                <div class="attitude-readout" id="attitude-readout">PITCH: +1.2° &bull; ROLL: -0.8°</div>
+              </div>
+
+              <!-- Compass Tape -->
+              <div class="hud-compass-bar">
+                <span class="compass-marker">NW</span>
+                <span class="compass-marker">330</span>
+                <span class="compass-marker primary">N [358°]</span>
+                <span class="compass-marker">030</span>
+                <span class="compass-marker">NE</span>
+              </div>
+
+              <!-- Dynamic Hazard Alert Badge in Feed -->
+              <div class="hud-hazard-banner hidden" id="hud-hazard-banner">
+                <span class="warning-triangle">⚠️</span>
+                <span id="hud-hazard-text">AI WARNING: COMBUSTIBLE GAS POCKET DETECTED</span>
+              </div>
+
+              <!-- Depth & Distance HUD Indicators -->
+              <div class="hud-bottom-stats">
+                <div class="hud-stat-pill">
+                  <span class="pill-label">FORWARD OBSTACLE</span>
+                  <span class="pill-val" id="hud-obstacle-dist">1.42 m</span>
+                </div>
+                <div class="hud-stat-pill">
+                  <span class="pill-label">GROUND ELEVATION</span>
+                  <span class="pill-val">-180.4 m</span>
+                </div>
+                <div class="hud-stat-pill">
+                  <span class="pill-label">DRIVE STATUS</span>
+                  <span class="pill-val highlight" id="hud-drive-status">AUTONOMOUS PATROL</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rover Drive Teleoperation Deck -->
+        <div class="card tactical-card rover-controls-card">
+          <div class="card-header">
+            <div class="header-title-group">
+              <span class="card-indicator control-indicator"></span>
+              <h2 class="card-title">ROVER TELEOPERATION & PROPULSION</h2>
+            </div>
+            <div class="drive-state-badge" id="drive-state-display">STATUS: PATROLLING</div>
+          </div>
+
+          <div class="controls-content-grid">
+            <!-- Left: Master Start / Stop Industrial Switch -->
+            <div class="master-switch-section">
+              <div class="section-label">ROVER MASTER DRIVE</div>
+              <div class="master-btn-cluster">
+                <button class="master-drive-btn start-btn" id="rover-start-btn">
+                  <span class="btn-icon">⚡</span>
+                  <span class="btn-caption">START ROVER</span>
+                  <span class="btn-subtext">ENGAGE MOTORS</span>
+                </button>
+                <button class="master-drive-btn stop-btn active" id="rover-stop-btn">
+                  <span class="btn-icon">🛑</span>
+                  <span class="btn-caption">STOP ROVER</span>
+                  <span class="btn-subtext">HALT PROPULSION</span>
+                </button>
+              </div>
+
+              <div class="autonomous-toggle-row">
+                <label class="switch-toggle-label" for="auto-nav-toggle">
+                  <input type="checkbox" id="auto-nav-toggle" checked>
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-text">AI Obstacle Guard (Ultrasonic)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Center: Tactile D-PAD Teleoperation with Keyboard Support -->
+            <div class="teleop-dpad-section">
+              <div class="section-label">MANUAL TELEOP (WASD / ARROWS)</div>
+              <div class="dpad-grid">
+                <div class="dpad-cell"></div>
+                <button class="dpad-btn" id="dpad-up" data-dir="FORWARD" title="Forward (W / Up Arrow)">
+                  <span class="dpad-arrow">▲</span>
+                  <span class="key-hint">W</span>
+                </button>
+                <div class="dpad-cell"></div>
+
+                <button class="dpad-btn" id="dpad-left" data-dir="LEFT" title="Steer Left (A / Left Arrow)">
+                  <span class="dpad-arrow">◀</span>
+                  <span class="key-hint">A</span>
+                </button>
+                <button class="dpad-btn center-halt" id="dpad-brake" data-dir="BRAKE" title="Brake (Spacebar)">
+                  <span class="dpad-arrow">■</span>
+                  <span class="key-hint">SPACE</span>
+                </button>
+                <button class="dpad-btn" id="dpad-right" data-dir="RIGHT" title="Steer Right (D / Right Arrow)">
+                  <span class="dpad-arrow">▶</span>
+                  <span class="key-hint">D</span>
+                </button>
+
+                <div class="dpad-cell"></div>
+                <button class="dpad-btn" id="dpad-down" data-dir="REVERSE" title="Reverse (S / Down Arrow)">
+                  <span class="dpad-arrow">▼</span>
+                  <span class="key-hint">S</span>
+                </button>
+                <div class="dpad-cell"></div>
+              </div>
+            </div>
+
+            <!-- Right: Speed Throttle & Transmission -->
+            <div class="throttle-section">
+              <div class="section-label">MOTOR PWM THROTTLE</div>
+              <div class="throttle-slider-container">
+                <input type="range" min="0" max="100" value="65" class="throttle-slider" id="throttle-slider">
+                <div class="throttle-labels">
+                  <span>0% (IDLE)</span>
+                  <span id="throttle-value-text" class="throttle-active-val">65% PWM</span>
+                  <span>100% (MAX)</span>
+                </div>
+              </div>
+              <div class="gear-selection-row">
+                <button class="gear-btn" data-gear="1">LOW CRAWL</button>
+                <button class="gear-btn active" data-gear="2">PATROL</button>
+                <button class="gear-btn" data-gear="3">RAPID RECON</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- COLUMN 2: SENSOR TELEMETRY, PHYSICAL LCD MIRROR & BATTERY -->
+      <section class="grid-col col-secondary" aria-label="Environmental Sensors & System Telemetry">
+        
+        <!-- Battery Health & Power Station -->
+        <div class="card tactical-card battery-card">
+          <div class="card-header">
+            <div class="header-title-group">
+              <span class="card-indicator battery-indicator"></span>
+              <h2 class="card-title">BATTERY & POWER TELEMETRY</h2>
+            </div>
+            <span class="battery-status-tag" id="battery-status-tag">NORMAL DISCHARGE</span>
+          </div>
+
+          <div class="battery-content-flex">
+            <!-- Animated Battery Visual Gauge -->
+            <div class="battery-visual-box">
+              <div class="battery-cylinder">
+                <div class="battery-terminal"></div>
+                <div class="battery-fill-level" id="battery-fill-level" style="width: 84%;">
+                  <div class="battery-liquid-sheen"></div>
+                </div>
+              </div>
+              <div class="battery-pct-large" id="battery-pct-text">84%</div>
+            </div>
+
+            <!-- Power Stat Readouts -->
+            <div class="power-stats-grid">
+              <div class="power-stat-item">
+                <span class="p-label">PACK VOLTAGE</span>
+                <span class="p-val" id="batt-voltage">8.24 V</span>
+                <span class="p-sub">2S Li-ion 7.4V Nom</span>
+              </div>
+              <div class="power-stat-item">
+                <span class="p-label">DISCHARGE CURRENT</span>
+                <span class="p-val" id="batt-current">1.48 A</span>
+                <span class="p-sub">ESP32 + Dual DC Motors</span>
+              </div>
+              <div class="power-stat-item">
+                <span class="p-label">POWER DRAW</span>
+                <span class="p-val" id="batt-power">12.2 W</span>
+                <span class="p-sub">Nominal Load</span>
+              </div>
+              <div class="power-stat-item">
+                <span class="p-label">EST. RUNTIME</span>
+                <span class="p-val highlight" id="batt-runtime">3h 42m</span>
+                <span class="p-sub">Remaining Capacity</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Physical I2C 16x2 LCD Display Simulator & Annunciator Panel -->
+        <div class="card tactical-card lcd-card">
+          <div class="card-header">
+            <div class="header-title-group">
+              <span class="card-indicator lcd-indicator"></span>
+              <h2 class="card-title">ON-BOARD I2C LCD & ANNUNCIATOR</h2>
+            </div>
+            <span class="lcd-i2c-addr">ADDR: 0x27 (PCF8574T)</span>
+          </div>
+
+          <div class="lcd-annunciator-flex">
+            <!-- 16x2 Green/Blue Backlit Matrix LCD -->
+            <div class="physical-lcd-enclosure">
+              <div class="lcd-screen" id="lcd-screen">
+                <div class="lcd-line" id="lcd-line-1">GAS:142PPM FLM:0</div>
+                <div class="lcd-line" id="lcd-line-2">VIB:0.04G DST:142</div>
+              </div>
+            </div>
+
+            <!-- Rover Hardware Annunciator LEDs & Piezo Buzzer State -->
+            <div class="annunciator-panel">
+              <div class="annunciator-title">HARDWARE INDICATORS</div>
+              <div class="led-indicator-row">
+                <div class="led-block">
+                  <div class="led-bulb green-led active" id="led-normal" title="Normal Operating State"></div>
+                  <span class="led-tag">NORMAL</span>
+                </div>
+                <div class="led-block">
+                  <div class="led-bulb yellow-led" id="led-warning" title="Warning Threshold Exceeded"></div>
+                  <span class="led-tag">ALERT</span>
+                </div>
+                <div class="led-block">
+                  <div class="led-bulb red-led" id="led-danger" title="Critical Hazard Triggered"></div>
+                  <span class="led-tag">DANGER</span>
+                </div>
+                <div class="led-block">
+                  <div class="buzzer-speaker" id="buzzer-speaker-indicator" title="Piezo Buzzer Status">
+                    <span class="buzzer-icon">🔔</span>
+                  </div>
+                  <span class="led-tag" id="buzzer-state-label">BUZZER OFF</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6-Sensor Environmental Hazard Telemetry Grid -->
+        <div class="sensors-metric-grid">
+          
+          <!-- Sensor 1: MQ-5 Combustible Gas -->
+          <div class="card tactical-card sensor-card" id="card-sensor-gas">
+            <div class="sensor-card-top">
+              <div class="sensor-info">
+                <span class="sensor-type-tag">GAS DETECTOR</span>
+                <h3 class="sensor-name">MQ-5 Combustible Gas</h3>
+                <span class="sensor-detects">Methane (CH₄), LPG, Propane</span>
+              </div>
+              <span class="hazard-level-badge safe" id="badge-gas">SAFE</span>
+            </div>
+            <div class="sensor-main-reading">
+              <span class="reading-num" id="val-gas">142</span>
+              <span class="reading-unit">PPM</span>
+            </div>
+            <div class="sensor-bar-track">
+              <div class="sensor-bar-fill safe" id="bar-gas" style="width: 24%;"></div>
+              <div class="threshold-marker" style="left: 60%;" title="Threshold: 300 PPM"></div>
+            </div>
+            <div class="sensor-card-footer">
+              <span class="threshold-caption">THRESHOLD: 300 PPM</span>
+              <canvas class="sparkline-canvas" id="spark-gas" width="120" height="26"></canvas>
+            </div>
+          </div>
+
+          <!-- Sensor 2: Smoke & Particulate -->
+          <div class="card tactical-card sensor-card" id="card-sensor-smoke">
+            <div class="sensor-card-top">
+              <div class="sensor-info">
+                <span class="sensor-type-tag">AIR QUALITY</span>
+                <h3 class="sensor-name">Optical Smoke Sensor</h3>
+                <span class="sensor-detects">Carbon Monoxide, Aerosols</span>
+              </div>
+              <span class="hazard-level-badge safe" id="badge-smoke">CLEAR</span>
+            </div>
+            <div class="sensor-main-reading">
+              <span class="reading-num" id="val-smoke">28</span>
+              <span class="reading-unit">PPM</span>
+            </div>
+            <div class="sensor-bar-track">
+              <div class="sensor-bar-fill safe" id="bar-smoke" style="width: 14%;"></div>
+              <div class="threshold-marker" style="left: 50%;" title="Threshold: 100 PPM"></div>
+            </div>
+            <div class="sensor-card-footer">
+              <span class="threshold-caption">THRESHOLD: 100 PPM</span>
+              <canvas class="sparkline-canvas" id="spark-smoke" width="120" height="26"></canvas>
+            </div>
+          </div>
+
+          <!-- Sensor 3: Optical IR Flame Detector -->
+          <div class="card tactical-card sensor-card" id="card-sensor-flame">
+            <div class="sensor-card-top">
+              <div class="sensor-info">
+                <span class="sensor-type-tag">OPTICAL IR</span>
+                <h3 class="sensor-name">IR Flame / Fire Sensor</h3>
+                <span class="sensor-detects">760nm - 1100nm Infrared Flame</span>
+              </div>
+              <span class="hazard-level-badge safe" id="badge-flame">NO FLAME</span>
+            </div>
+            <div class="sensor-main-reading">
+              <span class="reading-num" id="val-flame">0</span>
+              <span class="reading-unit">STATE (0-1023)</span>
+            </div>
+            <div class="sensor-bar-track">
+              <div class="sensor-bar-fill safe" id="bar-flame" style="width: 2%;"></div>
+              <div class="threshold-marker" style="left: 30%;" title="Trigger: > 350 Analog"></div>
+            </div>
+            <div class="sensor-card-footer">
+              <span class="threshold-caption">STATUS: INACTIVE (SECURE)</span>
+              <canvas class="sparkline-canvas" id="spark-flame" width="120" height="26"></canvas>
+            </div>
+          </div>
+
+          <!-- Sensor 4: Structural Vibration & Seismic Sensor -->
+          <div class="card tactical-card sensor-card" id="card-sensor-vib">
+            <div class="sensor-card-top">
+              <div class="sensor-info">
+                <span class="sensor-type-tag">SEISMIC / STRUCTURAL</span>
+                <h3 class="sensor-name">SW-420 Vibration Sensor</h3>
+                <span class="sensor-detects">Shaft Disturbance, Micro-tremors</span>
+              </div>
+              <span class="hazard-level-badge safe" id="badge-vib">STABLE</span>
+            </div>
+            <div class="sensor-main-reading">
+              <span class="reading-num" id="val-vib">0.04</span>
+              <span class="reading-unit">G-FORCE (g)</span>
+            </div>
+            <div class="sensor-bar-track">
+              <div class="sensor-bar-fill safe" id="bar-vib" style="width: 8%;"></div>
+              <div class="threshold-marker" style="left: 50%;" title="Threshold: 0.50 g"></div>
+            </div>
+            <div class="sensor-card-footer">
+              <span class="threshold-caption">THRESHOLD: 0.50 g</span>
+              <canvas class="sparkline-canvas" id="spark-vib" width="120" height="26"></canvas>
+            </div>
+          </div>
+
+          <!-- Sensor 5: Ultrasonic Proximity Distance -->
+          <div class="card tactical-card sensor-card" id="card-sensor-dist">
+            <div class="sensor-card-top">
+              <div class="sensor-info">
+                <span class="sensor-type-tag">SONAR PROXIMITY</span>
+                <h3 class="sensor-name">HC-SR04 Ultrasonic</h3>
+                <span class="sensor-detects">Rockfall Obstacle & Drift Clearance</span>
+              </div>
+              <span class="hazard-level-badge safe" id="badge-dist">CLEAR</span>
+            </div>
+            <div class="sensor-main-reading">
+              <span class="reading-num" id="val-dist">142</span>
+              <span class="reading-unit">CM</span>
+            </div>
+            <div class="sensor-bar-track">
+              <div class="sensor-bar-fill safe" id="bar-dist" style="width: 71%;"></div>
+              <div class="threshold-marker" style="left: 15%;" title="Proximity Stop: 30 cm"></div>
+            </div>
+            <div class="sensor-card-footer">
+              <span class="threshold-caption">MIN SAFETY: 30 CM</span>
+              <canvas class="sparkline-canvas" id="spark-dist" width="120" height="26"></canvas>
+            </div>
+          </div>
+
+          <!-- Sensor 6: Ambient Drift Climate -->
+          <div class="card tactical-card sensor-card" id="card-sensor-climate">
+            <div class="sensor-card-top">
+              <div class="sensor-info">
+                <span class="sensor-type-tag">MICROCLIMATE</span>
+                <h3 class="sensor-name">Shaft Temp & Humidity</h3>
+                <span class="sensor-detects">Underground Heat Stress & Moisture</span>
+              </div>
+              <span class="hazard-level-badge safe" id="badge-climate">OPTIMAL</span>
+            </div>
+            <div class="sensor-main-reading">
+              <span class="reading-num" id="val-temp">24.6</span>
+              <span class="reading-unit">°C / 68% RH</span>
+            </div>
+            <div class="sensor-bar-track">
+              <div class="sensor-bar-fill safe" id="bar-temp" style="width: 45%;"></div>
+            </div>
+            <div class="sensor-card-footer">
+              <span class="threshold-caption">VENTILATION: ADEQUATE</span>
+              <canvas class="sparkline-canvas" id="spark-temp" width="120" height="26"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- COLUMN 3: AI/ML HAZARD PREDICTION & EMERGENCY EVACUATION HOIST -->
+      <section class="grid-col col-tertiary" aria-label="AI Hazard Prediction & Emergency Hoist Rescue">
+        
+        <!-- Emergency Evacuation Master Trigger Card -->
+        <div class="card tactical-card emergency-master-card" id="emergency-master-card">
+          <div class="card-header">
+            <div class="header-title-group">
+              <span class="card-indicator red-strobe-indicator"></span>
+              <h2 class="card-title emergency-title">EMERGENCY EVACUATION</h2>
+            </div>
+            <span class="evac-status-badge" id="evac-status-badge">SYSTEM ARMED</span>
+          </div>
+
+          <div class="emergency-action-container">
+            <p class="emergency-guidance">
+              Activating emergency evacuation immediately halts rover patrol, triggers audio evacuation sirens across underground shafts, sounds audible alarms, and activates the <strong>relay-controlled 9V motorized hoist pulley</strong> to evacuate miners to safety.
+            </p>
+
+            <!-- Tactical Safety Switch with Flip Cover -->
+            <div class="tactical-safety-switch-wrap">
+              <div class="switch-cover-lever" id="safety-cover" title="Click to flip safety shield and arm emergency trigger">
+                <div class="cover-stripe-pattern"></div>
+                <span class="cover-label" id="cover-label">LIFT SAFETY COVER</span>
+                <span class="cover-lock-icon" id="cover-lock-icon">🔒</span>
+              </div>
+
+              <button class="tactical-evacuate-btn" id="emergency-evac-btn" disabled>
+                <span class="evac-icon">⚠️</span>
+                <span class="evac-main-text">TRIGGER EMERGENCY EVACUATION</span>
+                <span class="evac-sub-text">ACTIVATE 9V MOTOR PULLEY HOIST & ALARM</span>
+              </button>
+            </div>
+
+            <!-- Cancel / Reset Emergency Trigger -->
+            <button class="reset-evac-btn hidden" id="reset-evac-btn">
+              ↺ CANCEL EMERGENCY & RESET HOIST
+            </button>
+          </div>
+        </div>
+
+        <!-- 9V Motor & Pulley / Lifting Rescue Hoist Mechanism Visualizer -->
+        <div class="card tactical-card hoist-card">
+          <div class="card-header">
+            <div class="header-title-group">
+              <span class="card-indicator hoist-indicator"></span>
+              <h2 class="card-title">9V MOTOR & PULLEY RESCUE HOIST</h2>
+            </div>
+            <span class="relay-state-chip" id="relay-state-chip">RELAY: OFF (0V)</span>
+          </div>
+
+          <div class="hoist-visualizer-container">
+            <!-- Graphical Shaft & Pulley Winch Simulator -->
+            <div class="hoist-shaft-viewport">
+              <div class="shaft-surface-rig">
+                <div class="pulley-wheel" id="pulley-wheel">
+                  <div class="wheel-spoke spoke-1"></div>
+                  <div class="wheel-spoke spoke-2"></div>
+                  <div class="wheel-spoke spoke-3"></div>
+                  <div class="wheel-hub"></div>
+                </div>
+                <div class="winch-motor-housing">
+                  <span class="motor-label">9V HIGH-TORQUE MOTOR</span>
+                  <span class="motor-rpm" id="motor-rpm-text">0 RPM</span>
+                </div>
+              </div>
+
+              <!-- Cable & Rescue Capsule -->
+              <div class="shaft-borehole">
+                <div class="hoist-cable" id="hoist-cable" style="height: 180px;"></div>
+                <div class="rescue-capsule" id="rescue-capsule" style="top: 180px;">
+                  <div class="capsule-light"></div>
+                  <span class="capsule-icon">👷</span>
+                  <span class="capsule-label">OREO EVAC CAGE</span>
+                </div>
+                <!-- Depth markers along borehole -->
+                <div class="depth-ticks">
+                  <span>0m (SURFACE)</span>
+                  <span>-60m</span>
+                  <span>-120m</span>
+                  <span>-180m (MINE DRIFT)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hoist Telemetry & Manual Override Controls -->
+            <div class="hoist-controls-panel">
+              <div class="hoist-metrics-row">
+                <div class="hoist-metric">
+                  <span class="hm-label">HOIST DEPTH</span>
+                  <span class="hm-val" id="hoist-depth-val">-180.0 m</span>
+                </div>
+                <div class="hoist-metric">
+                  <span class="hm-label">CABLE TENSION</span>
+                  <span class="hm-val" id="hoist-tension-val">480 N</span>
+                </div>
+                <div class="hoist-metric">
+                  <span class="hm-label">RELAY COIL</span>
+                  <span class="hm-val" id="hoist-relay-volt">0.0 V (OPEN)</span>
+                </div>
+              </div>
+
+              <div class="hoist-button-group">
+                <button class="hoist-manual-btn" id="hoist-up-btn">
+                  ▲ WINCH UP (ASCENT)
+                </button>
+                <button class="hoist-manual-btn" id="hoist-down-btn">
+                  ▼ WINCH DOWN (DESCENT)
+                </button>
+                <button class="hoist-manual-btn stop" id="hoist-halt-btn">
+                  ■ HOIST BRAKE
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI/ML Hazard Prediction & Early Warning Engine -->
+        <div class="card tactical-card ml-card">
+          <div class="card-header">
+            <div class="header-title-group">
+              <span class="card-indicator ai-indicator"></span>
+              <h2 class="card-title">AI/ML HAZARD PREDICTION</h2>
+            </div>
+            <span class="model-badge">RANDOM FOREST &bull; 98.5% F1</span>
+          </div>
+
+          <div class="ml-engine-content">
+            <!-- 7-Step Workflow Pipeline Visualizer -->
+            <div class="ml-pipeline-flow" aria-label="7-Step AI Pipeline Flow">
+              <div class="flow-step active" title="Sense multi-sensor inputs">
+                <span class="step-num">1</span>
+                <span class="step-name">Sense</span>
+              </div>
+              <span class="flow-arrow">&rarr;</span>
+              <div class="flow-step active" title="Collect sensor telemetry from ESP32">
+                <span class="step-num">2</span>
+                <span class="step-name">Collect</span>
+              </div>
+              <span class="flow-arrow">&rarr;</span>
+              <div class="flow-step active" title="Data cleaning, normalization, scaling">
+                <span class="step-num">3</span>
+                <span class="step-name">Clean</span>
+              </div>
+              <span class="flow-arrow">&rarr;</span>
+              <div class="flow-step active highlight-step" title="Inference model evaluates hazard patterns">
+                <span class="step-num">4</span>
+                <span class="step-name">AI Infer</span>
+              </div>
+              <span class="flow-arrow">&rarr;</span>
+              <div class="flow-step" id="flow-step-detect" title="Hazard classification output">
+                <span class="step-num">5</span>
+                <span class="step-name">Detect</span>
+              </div>
+              <span class="flow-arrow">&rarr;</span>
+              <div class="flow-step" id="flow-step-alert" title="Trigger alerts on dashboard & buzzer">
+                <span class="step-num">6</span>
+                <span class="step-name">Alert</span>
+              </div>
+              <span class="flow-arrow">&rarr;</span>
+              <div class="flow-step" id="flow-step-evac" title="Emergency action & 9V rescue hoist">
+                <span class="step-num">7</span>
+                <span class="step-name">Rescue</span>
+              </div>
+            </div>
+
+            <!-- Model Live Prediction Display -->
+            <div class="ml-prediction-banner normal" id="ml-prediction-banner">
+              <div class="pred-left">
+                <span class="pred-caption">REAL-TIME ML PREDICTION</span>
+                <span class="pred-class" id="ml-pred-class">NORMAL CONDITIONS</span>
+                <span class="pred-desc" id="ml-pred-desc">Atmospheric & structural conditions within safe mining thresholds.</span>
+              </div>
+              <div class="pred-right">
+                <span class="pred-conf-label">MODEL CONFIDENCE</span>
+                <span class="pred-conf-pct" id="ml-conf-pct">97.8%</span>
+                <div class="pred-conf-bar-wrap">
+                  <div class="pred-conf-bar-fill" id="ml-conf-bar" style="width: 97.8%;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feature Importance & Dataset Collector -->
+            <div class="ml-data-toolbar">
+              <div class="dataset-stats">
+                <span class="ds-count">BUFFERED READINGS: <strong id="dataset-samples-count">148</strong></span>
+                <span class="ds-rate">SAMPLING: 5 Hz</span>
+              </div>
+              <div class="ml-action-btns">
+                <button class="ml-btn" id="export-csv-btn" title="Download logged sensor dataset for Python ML model training">
+                  💾 EXPORT DATASET (.CSV)
+                </button>
+                <button class="ml-btn secondary" id="clear-dataset-btn" title="Reset dataset buffer">
+                  🗑️ CLEAR
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rapid Hazard Simulation & Testing Rig -->
+        <div class="card tactical-card sim-triggers-card">
+          <div class="card-header">
+            <div class="header-title-group">
+              <span class="card-indicator test-indicator"></span>
+              <h2 class="card-title">HAZARD INJECTION & DEMO RIG</h2>
+            </div>
+            <span class="test-rig-badge">EVALUATOR TEST RIG</span>
+          </div>
+
+          <div class="sim-triggers-body">
+            <p class="sim-instruction">
+              Test and demonstrate the complete <strong>Sense &rarr; ML Predict &rarr; Alert &rarr; Rescue</strong> workflow with one click:
+            </p>
+            <div class="sim-button-grid">
+              <button class="scenario-btn" data-scenario="normal" id="sim-btn-normal">
+                <span class="sc-icon">✅</span>
+                <span class="sc-name">Normal Patrol</span>
+              </button>
+              <button class="scenario-btn warning" data-scenario="gas" id="sim-btn-gas">
+                <span class="sc-icon">💨</span>
+                <span class="sc-name">Methane Gas Leak</span>
+              </button>
+              <button class="scenario-btn danger" data-scenario="fire" id="sim-btn-fire">
+                <span class="sc-icon">🔥</span>
+                <span class="sc-name">Mine Flame / Fire</span>
+              </button>
+              <button class="scenario-btn warning" data-scenario="seismic" id="sim-btn-seismic">
+                <span class="sc-icon">⚡</span>
+                <span class="sc-name">Seismic Shock</span>
+              </button>
+              <button class="scenario-btn danger" data-scenario="obstacle" id="sim-btn-obstacle">
+                <span class="sc-icon">🚧</span>
+                <span class="sc-name">Drift Cave-in</span>
+              </button>
+              <button class="scenario-btn critical" data-scenario="catastrophic" id="sim-btn-critical">
+                <span class="sc-icon">🚨</span>
+                <span class="sc-name">Multi-Hazard Crisis</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- FOOTER TELEMETRY & SYSTEM DETAILS -->
+    <footer class="tactical-footer">
+      <div class="footer-left">
+        <span class="project-tag">PROJECT OREO &bull; UNDERGROUND MINING HAZARD DETECTION & RESCUE</span>
+        <span class="divider">|</span>
+        <span class="hw-spec">ESP32 Dev Module &bull; MQ-5 &bull; IR Flame &bull; SW-420 &bull; HC-SR04 &bull; 9V Rescue Hoist</span>
+      </div>
+      <div class="footer-right">
+        <span class="data-packets-count" id="packet-counter">PACKETS RECEIVED: 1,428</span>
+        <span class="divider">|</span>
+        <span class="ai-status">AI ENGINE: ACTIVE (PYTHON ML PIPELINE READY)</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- CONFIGURATION MODAL (FOR REAL ESP32 CONNECTION) -->
+  <div class="modal-overlay hidden" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">⚙️ ESP32 HARDWARE & NETWORK BRIDGE</h3>
+        <button class="modal-close-btn" id="close-settings-btn" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="esp32-ip-input">ESP32 Wi-Fi IP / WebSocket Address</label>
+          <input type="text" id="esp32-ip-input" class="text-input" placeholder="e.g. 192.168.4.1 or ws://192.168.1.150:81" value="192.168.4.1">
+          <span class="input-hint">Default SoftAP IP is 192.168.4.1 for ESP32 Dev Module</span>
+        </div>
+        <div class="form-group">
+          <label for="cam-stream-input">ESP32-CAM MJPEG Video Stream URL</label>
+          <input type="text" id="cam-stream-input" class="text-input" placeholder="e.g. http://192.168.4.1:81/stream" value="http://192.168.4.1:81/stream">
+          <span class="input-hint">If ESP32-CAM is connected on local Wi-Fi</span>
+        </div>
+        <div class="form-group">
+          <label for="polling-freq-input">Telemetry Polling Rate (Hz)</label>
+          <select id="polling-freq-input" class="text-input">
+            <option value="1">1 Hz (Low Bandwidth)</option>
+            <option value="5" selected>5 Hz (Recommended Standard)</option>
+            <option value="10">10 Hz (High Speed Telemetry)</option>
+          </select>
+        </div>
+        <div class="modal-status-box" id="bridge-status-text">
+          Status: Simulated Mode Active (Click "Connect to ESP32" once your rover Wi-Fi is reachable).
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn secondary" id="cancel-settings-btn">CLOSE</button>
+        <button class="modal-btn primary" id="save-connect-btn">TEST & CONNECT TO ESP32</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT MODULES -->
+  <script src="video-feed.js"></script>
+  <script src="ai-engine.js"></script>
+  <script src="rescue-hoist.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
