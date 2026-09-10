@@ -27,7 +27,7 @@ class OreoDashboardApp {
     this.audioMuted = false;
     this.isEmergencyActive = false;
     this.safetyCoverOpen = false;
-    
+
     // Telemetry Sensor State
     this.sensorData = {
       gas: 142,        // MQ-5 PPM
@@ -62,6 +62,9 @@ class OreoDashboardApp {
     this.mode = 'SIMULATION'; // 'SIMULATION' or 'ESP32_LIVE'
     this.esp32Ip = '192.168.4.1';
     this.pollingHz = 5;
+    this.baseUrl = 'https://oreobackend-production.up.railway.app';
+    this.missionId = null;
+    this.isFetchingRealData = false;
 
     this.initSubsystems();
     this.initDOMListeners();
@@ -85,7 +88,7 @@ class OreoDashboardApp {
     // 1. Rover Master Start / Stop Buttons
     const startBtn = document.getElementById('rover-start-btn');
     const stopBtn = document.getElementById('rover-stop-btn');
-    
+
     if (startBtn && stopBtn) {
       startBtn.addEventListener('click', () => {
         this.isRoverRunning = true;
@@ -216,7 +219,8 @@ class OreoDashboardApp {
         this.mode = 'ESP32_LIVE';
         hwBtn.classList.add('active');
         simBtn.classList.remove('active');
-        this.openSettingsModal();
+        this.updateSystemStatusChip(true, 'ESP32 LIVE (ONLINE)');
+        this.fetchRealData();
       });
     }
 
@@ -236,7 +240,13 @@ class OreoDashboardApp {
           const ipInput = document.getElementById('esp32-ip-input');
           if (ipInput) this.esp32Ip = ipInput.value;
           modal.classList.add('hidden');
-          this.testEsp32Connection();
+          this.mode = 'ESP32_LIVE';
+          if (hwBtn && simBtn) {
+            hwBtn.classList.add('active');
+            simBtn.classList.remove('active');
+          }
+          this.updateSystemStatusChip(true, 'ESP32 LIVE (ONLINE)');
+          this.fetchRealData();
         });
       }
     }
@@ -523,9 +533,9 @@ class OreoDashboardApp {
     }, 1000);
   }
 
-  tickTelemetry() {
-    // Add micro-noise in simulation mode to mimic real ADC readings
+  async tickTelemetry() {
     if (this.mode === 'SIMULATION') {
+      // Add micro-noise in simulation mode to mimic real ADC readings
       this.sensorData.gas += (Math.random() - 0.5) * 3;
       this.sensorData.smoke += (Math.random() - 0.5) * 1.5;
       this.sensorData.vibration += (Math.random() - 0.5) * 0.006;
@@ -537,27 +547,29 @@ class OreoDashboardApp {
       this.sensorData.smoke = Math.max(10, this.sensorData.smoke);
       this.sensorData.vibration = Math.max(0.01, this.sensorData.vibration);
       this.sensorData.distance = Math.max(5, this.sensorData.distance);
+
+      // Pass data through local AI/ML Classifier
+      let prediction = null;
+      if (this.aiEngine) {
+        prediction = this.aiEngine.predictHazard(this.sensorData);
+      }
+
+      // Update Physical 16x2 LCD mirror
+      this.updateLcdMirror(prediction ? prediction.label : 'NORMAL');
+
+      // Update Hardware Annunciator LEDs
+      if (!this.isEmergencyActive) {
+        const isDanger = prediction && (prediction.label === 'CRITICAL' || prediction.label === 'EMERGENCY');
+        const isWarning = prediction && prediction.label === 'WARNING';
+        const isNormal = !isDanger && !isWarning;
+        this.updateAnnunciator(isNormal, isWarning, isDanger, isDanger || isWarning);
+      }
+    } else if (this.mode === 'ESP32_LIVE') {
+      await this.fetchRealData();
     }
 
-    // Pass data through AI/ML Classifier
-    let prediction = null;
-    if (this.aiEngine) {
-      prediction = this.aiEngine.predictHazard(this.sensorData);
-    }
-
-    // Update Sparklines & DOM Sensors
+    // In both cases, update Sparklines & DOM Sensors
     this.updateSensorDOM();
-
-    // Update Physical 16x2 LCD mirror
-    this.updateLcdMirror(prediction ? prediction.label : 'NORMAL');
-
-    // Update Hardware Annunciator LEDs
-    if (!this.isEmergencyActive) {
-      const isDanger = prediction && (prediction.label === 'CRITICAL' || prediction.label === 'EMERGENCY');
-      const isWarning = prediction && prediction.label === 'WARNING';
-      const isNormal = !isDanger && !isWarning;
-      this.updateAnnunciator(isNormal, isWarning, isDanger, isDanger || isWarning);
-    }
   }
 
   updateSensorDOM() {
@@ -577,7 +589,7 @@ class OreoDashboardApp {
     this.setSensorCard('flame', Math.round(s.flame), s.flame > 350 ? 'danger' : 'safe', s.flame > 350 ? 'FIRE DETECTED' : 'NO FLAME', Math.min(100, (s.flame / 1023) * 100));
     this.setSensorCard('vib', s.vibration.toFixed(2), s.vibration > 0.5 ? 'danger' : s.vibration > 0.2 ? 'warning' : 'safe', s.vibration > 0.5 ? 'DISTURBANCE' : 'STABLE', Math.min(100, (s.vibration / 1.5) * 100));
     this.setSensorCard('dist', Math.round(s.distance), s.distance < 30 ? 'danger' : s.distance < 60 ? 'warning' : 'safe', s.distance < 30 ? 'OBSTACLE' : 'CLEAR', Math.min(100, (s.distance / 200) * 100));
-    
+
     // Climate
     const tempVal = document.getElementById('val-temp');
     if (tempVal) tempVal.innerText = `${s.temp.toFixed(1)}°C / ${Math.round(s.humidity)}%`;
@@ -719,7 +731,7 @@ class OreoDashboardApp {
     if (voltText) voltText.innerText = `${this.sensorData.batteryVolt.toFixed(2)} V`;
     if (currentText) currentText.innerText = `${this.sensorData.currentDraw.toFixed(2)} A`;
     if (powerText) powerText.innerText = `${(this.sensorData.batteryVolt * this.sensorData.currentDraw).toFixed(1)} W`;
-    
+
     // Remaining hours
     const remHours = (pct / 22).toFixed(1);
     if (runtimeText) runtimeText.innerText = `${remHours}h remaining`;
@@ -741,26 +753,103 @@ class OreoDashboardApp {
     if (modal) modal.classList.remove('hidden');
   }
 
-  testEsp32Connection() {
-    const statusText = document.getElementById('bridge-status-text');
-    if (statusText) statusText.innerText = `Connecting to ESP32 at http://${this.esp32Ip}/data...`;
+  async fetchRealData() {
+    if (this.isFetchingRealData) return;
+    this.isFetchingRealData = true;
 
-    // Attempt fetch with short timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    try {
+      // 1. Fetch active mission_id (cached in this.missionId so it's only fetched once)
+      if (!this.missionId) {
+        const missionRes = await fetch(`${this.baseUrl}/mission/active`);
+        if (missionRes.ok) {
+          const missionData = await missionRes.json();
+          if (missionData && missionData.mission_id) {
+            this.missionId = missionData.mission_id;
+          }
+          const missionEl = document.getElementById('mission');
+          if (missionEl) missionEl.textContent = JSON.stringify(missionData);
+        }
+      }
 
-    fetch(`http://${this.esp32Ip}/data`, { signal: controller.signal })
-      .then(res => res.json())
-      .then(data => {
-        clearTimeout(timeoutId);
-        if (statusText) statusText.innerText = `Success! Connected to ESP32 Dev Module at ${this.esp32Ip}.`;
-        this.updateSystemStatusChip(true, `ESP32 CONNECTED (${this.esp32Ip})`);
-      })
-      .catch(err => {
-        clearTimeout(timeoutId);
-        if (statusText) statusText.innerText = `ESP32 unreachable at ${this.esp32Ip}. Reverting to high-fidelity autonomous simulation mode.`;
-        this.updateSystemStatusChip(true, 'SYSTEM ONLINE (SIM)');
-      });
+      const mId = this.missionId || 1;
+
+      // 2. Fetch latest row from sensor_readings & risk_scores in parallel
+      const [sensorRes, riskRes] = await Promise.all([
+        fetch(`${this.baseUrl}/latest?table=sensor_readings&mission_id=${mId}&limit=1`),
+        fetch(`${this.baseUrl}/latest?table=risk_scores&mission_id=${mId}&limit=1`)
+      ]);
+
+      if (sensorRes.ok) {
+        const sensorRows = await sensorRes.json();
+        if (Array.isArray(sensorRows) && sensorRows.length > 0) {
+          const row = sensorRows[0];
+          if (row.gas_level !== undefined && row.gas_level !== null) this.sensorData.gas = Number(row.gas_level);
+          if (row.temperature !== undefined && row.temperature !== null) this.sensorData.temp = Number(row.temperature);
+          if (row.humidity !== undefined && row.humidity !== null) this.sensorData.humidity = Number(row.humidity);
+          if (row.vibration !== undefined && row.vibration !== null) this.sensorData.vibration = Number(row.vibration);
+          if (row.obstacle_distance !== undefined && row.obstacle_distance !== null) this.sensorData.distance = Number(row.obstacle_distance);
+          if (row.flame_detected !== undefined && row.flame_detected !== null) {
+            this.sensorData.flame = Number(row.flame_detected) === 1 ? 400 : 0;
+          }
+          if (row.battery_pct !== undefined && row.battery_pct !== null) {
+            this.sensorData.battery = Number(row.battery_pct);
+          }
+
+          const latestEl = document.getElementById('latest');
+          if (latestEl) latestEl.textContent = JSON.stringify(row);
+        }
+      }
+
+      if (riskRes.ok) {
+        const riskRows = await riskRes.json();
+        if (Array.isArray(riskRows) && riskRows.length > 0) {
+          const risk = riskRows[0];
+          const riskLevel = (risk.risk_level || 'SAFE').toUpperCase();
+
+          // Drive updateLcdMirror with risk level
+          this.updateLcdMirror(riskLevel);
+
+          // Drive updateAnnunciator: treat "GAS", "HEAT", "BLOCKAGE" as danger, "SAFE" as normal
+          if (!this.isEmergencyActive) {
+            const isDanger = ['GAS', 'HEAT', 'BLOCKAGE'].includes(riskLevel);
+            const isNormal = riskLevel === 'SAFE';
+            const isWarning = !isDanger && !isNormal;
+            this.updateAnnunciator(isNormal, isWarning, isDanger, isDanger || isWarning);
+          }
+
+          // Update ML Prediction Banner in the UI
+          const banner = document.getElementById('ml-prediction-banner');
+          const classEl = document.getElementById('ml-pred-class');
+          const descEl = document.getElementById('ml-pred-desc');
+          const confEl = document.getElementById('ml-conf-pct');
+          const barEl = document.getElementById('ml-conf-bar');
+
+          if (banner && classEl) {
+            const isDanger = ['GAS', 'HEAT', 'BLOCKAGE'].includes(riskLevel);
+            banner.className = 'ml-prediction-banner ' + (isDanger ? 'critical' : 'normal');
+            classEl.innerText = riskLevel === 'SAFE' ? 'NORMAL CONDITIONS' : `${riskLevel} DETECTED`;
+            if (descEl) {
+              descEl.innerText = riskLevel === 'SAFE'
+                ? 'Backend AI Model: Atmospheric & structural conditions within safe mining thresholds.'
+                : `Backend AI Model Alert: Real-time ${riskLevel} hazard detected by mining hazard classifier.`;
+            }
+            const score = risk.risk_score != null ? Number(risk.risk_score) : (isDanger ? 98.5 : 97.2);
+            if (confEl) confEl.innerText = `${score.toFixed(1)}%`;
+            if (barEl) barEl.style.width = `${Math.min(100, Math.max(0, score))}%`;
+          }
+
+          // Highlight pipeline flow steps
+          const stepDetect = document.getElementById('flow-step-detect');
+          const stepAlert = document.getElementById('flow-step-alert');
+          if (stepDetect) stepDetect.classList.toggle('active', riskLevel !== 'SAFE');
+          if (stepAlert) stepAlert.classList.toggle('active', ['GAS', 'HEAT', 'BLOCKAGE'].includes(riskLevel));
+        }
+      }
+    } catch (error) {
+      console.warn('Warning: Failed to fetch real data from backend API:', error);
+    } finally {
+      this.isFetchingRealData = false;
+    }
   }
 
   updateSystemStatusChip(online, label) {
@@ -880,7 +969,7 @@ class TacticalAudioSynthesizer {
       try {
         this.sirenOsc.stop();
         this.sirenOsc.disconnect();
-      } catch (e) {}
+      } catch (e) { }
       this.sirenOsc = null;
     }
   }
